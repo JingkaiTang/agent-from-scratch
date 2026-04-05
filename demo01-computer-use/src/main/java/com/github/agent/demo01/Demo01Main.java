@@ -21,6 +21,7 @@ import java.util.Scanner;
  * export OPENAI_BASE_URL=https://api.openai.com/v1   # 可选，默认 OpenAI
  * export OPENAI_MODEL=gpt-4o                          # 可选，默认 gpt-4o
  * export AGENT_AUTO_CONFIRM=true                      # 可选，跳过命令确认
+ * export AGENT_MAX_STEPS=20                            # 可选，最大步数，默认 20
  *
  * # 运行
  * cd demo01-computer-use
@@ -92,7 +93,9 @@ public class Demo01Main {
         }
 
         // 4. 创建 Agent
-        AgentLoop agent = new AgentLoop(llmClient, toolRegistry, SYSTEM_PROMPT, 10);
+        int maxSteps = Integer.parseInt(getEnv("AGENT_MAX_STEPS", "20"));
+        log.info("最大步数: {}", maxSteps);
+        AgentLoop agent = new AgentLoop(llmClient, toolRegistry, SYSTEM_PROMPT, maxSteps);
 
         // 5. 交互式循环
         System.out.println("\n🖥️  Computer Use Agent 已就绪！");

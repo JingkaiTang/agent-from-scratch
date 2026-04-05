@@ -33,11 +33,17 @@ public class AgentLoop {
     private final String systemPrompt;
     private final int maxSteps;
 
+    /** 对话历史，跨多次 run() 调用保持上下文 */
+    private final List<ChatMessage> conversationHistory = new ArrayList<>();
+
     public AgentLoop(LLMClient llmClient, ToolRegistry toolRegistry, String systemPrompt, int maxSteps) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.systemPrompt = systemPrompt;
         this.maxSteps = maxSteps;
+
+        // 初始化时添加 system prompt
+        conversationHistory.add(ChatMessage.system(systemPrompt));
     }
 
     /**
@@ -50,10 +56,8 @@ public class AgentLoop {
         log.info("========== Agent 启动 ==========");
         log.info("任务: {}", userTask);
 
-        // 初始化消息列表
-        List<ChatMessage> messages = new ArrayList<>();
-        messages.add(ChatMessage.system(systemPrompt));
-        messages.add(ChatMessage.user(userTask));
+        // 追加用户消息到对话历史（保持上下文连续性）
+        conversationHistory.add(ChatMessage.user(userTask));
 
         // 获取工具 schema
         List<Map<String, Object>> toolsSchema = toolRegistry.toOpenAIToolsSchema();
@@ -63,8 +67,8 @@ public class AgentLoop {
 
             try {
                 // 1. 调用 LLM
-                ChatMessage assistantMsg = llmClient.chat(messages, toolsSchema);
-                messages.add(assistantMsg);
+                ChatMessage assistantMsg = llmClient.chat(conversationHistory, toolsSchema);
+                conversationHistory.add(assistantMsg);
 
                 // 2. 检查是否有工具调用
                 if (assistantMsg.getToolCalls() != null && !assistantMsg.getToolCalls().isEmpty()) {
@@ -77,8 +81,8 @@ public class AgentLoop {
                         String result = executeTool(toolName, argsJson);
                         log.info("📋 工具结果: {}", result);
 
-                        // 把工具执行结果追加到消息列表
-                        messages.add(ChatMessage.toolResult(toolCall.getId(), result));
+                        // 把工具执行结果追加到对话历史
+                        conversationHistory.add(ChatMessage.toolResult(toolCall.getId(), result));
                     }
                 } else {
                     // 没有工具调用 → 认为任务完成
