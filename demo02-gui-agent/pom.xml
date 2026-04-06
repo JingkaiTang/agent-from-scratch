@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.github.agent</groupId>
+        <artifactId>agent-from-scratch</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>demo02-gui-agent</artifactId>
+    <name>Demo 02 - GUI Agent</name>
+    <description>为 Agent 提供 JavaFX 图形化聊天界面入口</description>
+
+    <properties>
+        <javafx.version>21.0.2</javafx.version>
+    </properties>
+
+    <dependencies>
+        <!-- JavaFX -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- HTTP Client -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+        </dependency>
+
+        <!-- JSON -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 使用 Launcher 而非 Demo02App 作为入口，绕过 JavaFX 模块检查 -->
+                    <mainClass>com.github.agent.demo02.Launcher</mainClass>
+                    <arguments/>
+                    <systemProperties>
+                        <!-- 启用 macOS Retina (HiDPI) 高清渲染 -->
+                        <systemProperty>
+                            <key>prism.allowhidpi</key>
+                            <value>true</value>
+                        </systemProperty>
+                        <systemProperty>
+                            <key>glass.win.uiScale</key>
+                            <value>1.0</value>
+                        </systemProperty>
+                    </systemProperties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.github.agent.demo02.Demo02App</mainClass>
+                    <options>
+                        <!-- 启用 macOS Retina (HiDPI) 高清渲染 -->
+                        <option>-Dprism.allowhidpi=true</option>
+                    </options>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

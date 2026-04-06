@@ -15,6 +15,7 @@
     <modules>
         <module>demo00-basic-agent</module>
         <module>demo01-computer-use</module>
+        <module>demo02-gui-agent</module>
     </modules>
 
     <properties>
