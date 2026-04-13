@@ -17,6 +17,7 @@
         <module>demo01-computer-use</module>
         <module>demo02-gui-agent</module>
         <module>demo03-session-management</module>
+        <module>demo04-memory-management</module>
     </modules>
 
     <properties>
