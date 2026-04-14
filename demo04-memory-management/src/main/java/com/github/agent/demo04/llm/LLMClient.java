@@ -299,9 +299,9 @@ public class LLMClient {
             node.put("content", msg.getContent());
         }
 
-        // assistant 消息回传 reasoning_content（thinking 模式必需）
-        if ("assistant".equals(msg.getRole()) && msg.getReasoningContent() != null) {
-            node.put("reasoning_content", msg.getReasoningContent());
+        // assistant 消息回传 reasoning_content（thinking 模式必需，需始终包含）
+        if ("assistant".equals(msg.getRole())) {
+            node.put("reasoning_content", msg.getReasoningContent() != null ? msg.getReasoningContent() : "");
         }
 
         // assistant 消息携带 tool_calls
