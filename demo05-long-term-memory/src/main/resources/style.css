@@ -1,0 +1,135 @@
+/* 全局样式 —— 统一中文字体 */
+.root {
+    -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;
+}
+
+/* ===== TextArea 通用样式 ===== */
+.text-area {
+    -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.text-area .content {
+    -fx-background-color: transparent;
+}
+
+.text-area .scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.text-area .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+/* 去除 TextArea 默认聚焦边框 */
+.text-area:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-background-color: transparent;
+}
+
+/* ===== 用户消息 —— 白色文字 ===== */
+.msg-user {
+    -fx-text-fill: white;
+    -fx-control-inner-background: #007AFF;
+}
+.msg-user .text {
+    -fx-fill: white;
+}
+
+/* ===== Agent 回复 —— 深色文字 ===== */
+.msg-agent {
+    -fx-text-fill: #212529;
+    -fx-control-inner-background: #E9ECEF;
+}
+.msg-agent .text {
+    -fx-fill: #212529;
+}
+
+/* ===== 工具调用 —— 棕色等宽文字 ===== */
+.msg-tool-call {
+    -fx-text-fill: #664D03;
+    -fx-font-family: "Menlo", "PingFang SC", "Microsoft YaHei", monospace;
+    -fx-control-inner-background: #FFF3CD;
+}
+.msg-tool-call .text {
+    -fx-fill: #664D03;
+}
+
+/* ===== 工具结果 —— 绿色等宽文字 ===== */
+.msg-tool-result {
+    -fx-text-fill: #0A3622;
+    -fx-font-family: "Menlo", "PingFang SC", "Microsoft YaHei", monospace;
+    -fx-control-inner-background: #D1E7DD;
+}
+.msg-tool-result .text {
+    -fx-fill: #0A3622;
+}
+
+/* ===== 错误信息 —— 红色文字 ===== */
+.msg-error {
+    -fx-text-fill: #58151C;
+    -fx-control-inner-background: #F8D7DA;
+}
+.msg-error .text {
+    -fx-fill: #58151C;
+}
+
+/* ===== 状态提示 —— 灰色斜体 ===== */
+.msg-status {
+    -fx-text-fill: #888;
+    -fx-font-style: italic;
+    -fx-control-inner-background: #F0F0F0;
+}
+.msg-status .text {
+    -fx-fill: #888;
+}
+
+/* ===== 记忆压缩 —— 紫色文字 ===== */
+.msg-memory {
+    -fx-text-fill: #6B21A8;
+    -fx-control-inner-background: #F3E8FF;
+}
+.msg-memory .text {
+    -fx-fill: #6B21A8;
+}
+
+/* ===== 其他组件字体 ===== */
+.button {
+    -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;
+}
+
+.label {
+    -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;
+}
+
+.text-field {
+    -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;
+}
+
+/* ===== 底部输入框 ===== */
+.input-area {
+    -fx-background-color: white;
+    -fx-border-color: #D0D0D0;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-font-size: 14px;
+    -fx-padding: 8 12;
+}
+
+.input-area .content {
+    -fx-background-color: white;
+}
+
+.input-area:focused {
+    -fx-border-color: #007AFF;
+    -fx-background-color: white;
+}
+
+.input-area .text {
+    -fx-fill: #333;
+}

@@ -18,6 +18,7 @@
         <module>demo02-gui-agent</module>
         <module>demo03-session-management</module>
         <module>demo04-memory-management</module>
+        <module>demo05-long-term-memory</module>
     </modules>
 
     <properties>
