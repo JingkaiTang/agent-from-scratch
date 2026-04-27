@@ -1,127 +1,131 @@
-# Demo 03 - Session Management（会话管理）
+# Demo 04 - Memory Management（短期记忆管理）
 
-在 demo02 GUI Agent 的基础上，增加**多会话管理**能力——支持创建、切换、删除多个独立对话，并将会话数据持久化到本地文件系统。
+在 demo03（会话管理）基础上新增**短期记忆管理**功能——当对话上下文过长时，自动触发滑动窗口 + LLM 摘要压缩，并在 GUI 中展示压缩过程。
 
 ## 学习目标
 
-通过本 Demo，你将学习和理解：
-
 | 概念 | 说明 |
 |------|------|
-| **会话建模** | 如何将"对话"抽象为 `Session` 实体，包含 ID、标题、时间戳、消息列表 |
-| **持久化存储** | 不依赖数据库，用 JSON 文件实现简单的本地持久化（每个会话一个文件） |
-| **多会话管理** | SessionManager 如何协调内存状态与持久化存储，处理创建/切换/删除的边界情况 |
-| **分层解耦** | 会话管理层（session）如何与 Agent 核心循环（core）、GUI 层（ui）解耦集成 |
-| **GUI 扩展** | 在现有聊天界面上扩展侧边栏，实现会话列表的交互 |
+| **Token 估算** | 手搓 token 计数器，理解中英文 token 化的差异 |
+| **滑动窗口** | 保留最近 N 轮对话，裁剪早期消息 |
+| **LLM 摘要压缩** | 用 LLM 将被裁掉的旧消息压缩为一条摘要，保留关键信息 |
+| **配置持久化** | 从 `~/.afs/config.json` 加载记忆管理参数 |
+| **可观察性** | 在 GUI 对话流中插入紫色气泡展示压缩事件 |
+
+## 核心机制
+
+```
+用户发消息 → AgentLoop.run()
+  → 每次调 LLM 前，MemoryManager 检查 token 用量
+  → 超过阈值（默认 80%）:
+      1. 保留 system prompt + 最近 3 轮对话（滑动窗口）
+      2. 被裁掉的旧消息用 LLM 压缩为摘要
+      3. 用 [system prompt, 摘要, 最近 3 轮] 替换原始历史
+      4. 回调通知 GUI → 插入紫色记忆压缩气泡
+  → 正常调用 LLM
+```
 
 ## 架构设计
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      GUI 层 (ui)                         │
-│  ┌──────────────┐    ┌──────────────────────────────┐   │
-│  │SessionSidebar│◄──►│        ChatWindow             │   │
-│  │ · 会话列表    │    │ · 消息展示区                   │   │
-│  │ · 新建按钮    │    │ · 输入区域                     │   │
-│  │ · 右键删除    │    │ · 流式输出                     │   │
-│  └──────┬───────┘    └──────────┬───────────────────┘   │
-│         │                       │                        │
-└─────────┼───────────────────────┼────────────────────────┘
-          │  点击/切换/删除        │  发送消息/接收回复
-          ▼                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  服务层 (agent)                           │
-│              ┌──────────────┐                            │
-│              │ AgentService │                            │
-│              │ · 异步调用    │                            │
-│              │ · 会话操作    │                            │
-│              └──┬────────┬──┘                            │
-│                 │        │                               │
-└─────────────────┼────────┼───────────────────────────────┘
-                  │        │
-        ┌─────────┘        └─────────┐
-        ▼                            ▼
-┌───────────────┐          ┌──────────────────┐
-│   core 层      │          │   session 层      │
-│ ┌───────────┐ │          │ ┌──────────────┐ │
-│ │ AgentLoop │ │          │ │SessionManager│ │
-│ │ · ReAct   │ │◄────────►│ │ · 内存管理    │ │
-│ │ · 工具调用 │ │  上下文   │ │ · CRUD 操作  │ │
-│ │ · 流式输出 │ │  切换     │ └──────┬───────┘ │
-│ └───────────┘ │          │        │          │
-└───────────────┘          │ ┌──────▼───────┐ │
-                           │ │ SessionStore │ │
-                           │ │ · JSON 读写   │ │
-                           │ │ · 文件管理    │ │
-                           │ └──────┬───────┘ │
-                           └────────┼──────────┘
-                                    │
-                                    ▼
-                           ~/.afs/
-                             sessions/
-                               ├── {uuid1}.json
-                               ├── {uuid2}.json
-                               └── ...
+┌──────────────────────────────────────────────────────────────┐
+│                      GUI 层 (ui)                              │
+│  ┌──────────────┐    ┌───────────────────────────────────┐   │
+│  │SessionSidebar│◄──►│           ChatWindow               │   │
+│  └──────────────┘    │  · 消息气泡（USER/AGENT/TOOL/...） │   │
+│                      │  · ⭐ 记忆压缩气泡（MEMORY 类型）   │   │
+│                      └───────────────┬───────────────────┘   │
+└──────────────────────────────────────┼───────────────────────┘
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │            AgentService              │
+                    │  · 初始化 MemoryManager 并注入       │
+                    └──────┬────────────────────┬──────────┘
+                           │                    │
+              ┌────────────┘                    └────────────┐
+              ▼                                              ▼
+┌──────────────────────┐                    ┌────────────────────┐
+│     core/AgentLoop   │                    │   memory 包 ⭐      │
+│  · ReAct 循环        │◄──── 每次调 LLM ──►│  ┌──────────────┐  │
+│  · 流式输出          │      前检查压缩    │  │MemoryManager │  │
+│  · 工具调用          │                    │  │ · 检查 token  │  │
+└──────────────────────┘                    │  │ · 触发压缩    │  │
+                                            │  └──────┬───────┘  │
+                                            │         │          │
+                                            │  ┌──────▼───────┐  │
+                                            │  │TokenCounter   │  │
+                                            │  │ · 中文~1.5t/字│  │
+                                            │  │ · 英文~0.5t/字│  │
+                                            │  └──────────────┘  │
+                                            │  ┌──────────────┐  │
+                                            │  │Conversation   │  │
+                                            │  │Compactor      │  │
+                                            │  │ · LLM 生成摘要│  │
+                                            │  └──────────────┘  │
+                                            └────────────────────┘
 ```
 
-## 核心类说明
+## 与 demo03 的差异
 
-### session 包（⭐ 本 Demo 新增）
-
-| 类 | 职责 |
-|----|------|
-| `Session` | 会话数据模型——包含 ID(UUID)、标题、创建/更新时间、消息列表，支持 Jackson 序列化 |
-| `SessionStore` | 持久化存储层——负责将 Session 序列化为 JSON 文件，以及从文件系统加载恢复 |
-| `SessionManager` | 会话管理服务——协调内存中的会话状态与持久化存储，提供创建/切换/删除/追加消息等操作 |
-| `SessionChangeListener` | 会话变更监听器接口——通知 GUI 层刷新侧边栏 |
-
-### 改造的类
-
-| 类 | 改造内容 |
-|----|---------|
-| `AgentLoop` | 新增 `setConversationHistory()` / `resetConversation()` 方法，支持外部切换对话上下文 |
-| `AgentService` | 集成 SessionManager，新增 `createSession()` / `switchSession()` / `deleteSession()` 等方法 |
-| `ChatWindow` | 集成 SessionSidebar 侧边栏，支持会话切换时重新渲染历史消息 |
-
-### ui 包（新增组件）
-
-| 类 | 职责 |
-|----|------|
-| `SessionSidebar` | 侧边栏 GUI 组件——展示会话列表、新建按钮、右键删除菜单，支持点击切换 |
+| 特性 | demo03 | demo04 |
+|------|--------|--------|
+| 上下文管理 | 无限制增长 | 自动压缩（滑动窗口 + 摘要） |
+| Token 感知 | 无 | TokenCounter 实时估算 |
+| 配置管理 | 仅环境变量 | `~/.afs/config.json` 持久化 |
+| GUI 气泡类型 | 6 种 | 7 种（新增 MEMORY 紫色气泡） |
+| reasoning 支持 | 无 | 透传 reasoning_content（兼容 qwen3.5 thinking 模式） |
 
 ## 项目结构
 
 ```
-demo03-session-management/
+demo04-memory-management/
 ├── pom.xml
-└── src/main/java/com/github/agent/demo03/
-    ├── Demo03App.java              # JavaFX Application 入口
-    ├── Launcher.java               # 启动器（绕过 JavaFX 模块检查）
+└── src/main/java/com/github/agent/demo04/
+    ├── Demo04App.java              # JavaFX Application 入口
+    ├── Launcher.java               # 启动器
     ├── agent/
-    │   ├── AgentConfig.java        # Agent 配置（环境变量）
-    │   └── AgentService.java       # ⭐ Agent 服务层（集成 SessionManager）
+    │   ├── AgentConfig.java        # Agent 配置
+    │   └── AgentService.java       # ⭐ 集成 MemoryManager
+    ├── config/
+    │   └── AppConfigLoader.java    # ⭐ 读取 ~/.afs/config.json
     ├── core/
-    │   ├── AgentCallback.java      # 回调接口
-    │   └── AgentLoop.java          # ⭐ Agent 核心循环（支持上下文切换）
+    │   ├── AgentCallback.java      # ⭐ 新增 onMemoryCompaction 回调
+    │   └── AgentLoop.java          # ⭐ 每次 LLM 调用前检查压缩
     ├── llm/
-    │   └── LLMClient.java          # LLM API 调用封装
+    │   └── LLMClient.java          # ⭐ 支持 reasoning_content 透传
+    ├── memory/                     # ⭐ 新增：记忆管理包
+    │   ├── MemoryConfig.java       # 记忆管理配置
+    │   ├── TokenCounter.java       # Token 估算器
+    │   ├── CompactionResult.java   # 压缩结果
+    │   ├── ConversationCompactor.java  # 对话压缩器
+    │   └── MemoryManager.java      # 记忆管理器
     ├── model/
-    │   └── ChatMessage.java        # 消息模型
-    ├── session/                    # ⭐ 新增：会话管理包
-    │   ├── Session.java            # 会话数据模型
-    │   ├── SessionChangeListener.java  # 会话变更监听器
-    │   ├── SessionManager.java     # 会话管理服务
-    │   └── SessionStore.java       # 持久化存储层
-    ├── tool/
-    │   ├── Tool.java               # 工具接口
-    │   ├── ToolRegistry.java       # 工具注册表
-    │   └── impl/
-    │       └── ExecTool.java       # Shell 命令执行工具
+    │   └── ChatMessage.java        # ⭐ 新增 reasoningContent 字段
+    ├── session/                    # 复用 demo03
+    ├── tool/                       # 复用
     └── ui/
-        ├── ChatWindow.java         # ⭐ 聊天窗口（集成侧边栏）
-        ├── MessageBubble.java      # 消息气泡组件
-        └── SessionSidebar.java     # ⭐ 新增：会话列表侧边栏
+        ├── ChatWindow.java         # ⭐ 展示记忆压缩气泡
+        ├── MessageBubble.java      # ⭐ 新增 MEMORY 类型（紫色居中）
+        └── SessionSidebar.java     # 复用
 ```
+
+## 核心类说明
+
+### memory 包（⭐ 本 Demo 新增）
+
+| 类 | 职责 |
+|----|------|
+| `TokenCounter` | 手搓 token 估算器——中文 ~1.5 token/字，英文 ~0.5 token/字，精度 ±20% |
+| `MemoryConfig` | 配置——maxContextTokens(8000)、compactionThreshold(0.8)、keepRecentRounds(3) |
+| `CompactionResult` | 不可变压缩结果——摘要文本、前后 token 对比、移除消息数、压缩率 |
+| `ConversationCompactor` | 对话压缩器——分割旧消息 → 调 LLM 生成摘要 → 组装新消息列表 |
+| `MemoryManager` | 核心协调者——检查 token 用量 → 超过阈值则调用 Compactor 压缩 |
+
+### config 包（⭐ 本 Demo 新增）
+
+| 类 | 职责 |
+|----|------|
+| `AppConfigLoader` | 从 `~/.afs/config.json` 加载配置，文件不存在时自动创建默认配置 |
 
 ## 快速开始
 
@@ -134,45 +138,38 @@ export OPENAI_MODEL=gpt-4o                          # 可选
 # 编译 & 运行
 cd agent-from-scratch
 mvn compile
-cd demo03-session-management
+cd demo04-memory-management
 mvn exec:java
 ```
 
-## 数据存储
+## 配置文件
 
-会话数据以 JSON 文件形式存储在用户主目录下（`~/.afs/` 是 Agent From Scratch 的主目录）：
-
-```
-~/.afs/sessions/
-├── a1b2c3d4-e5f6-7890-abcd-ef1234567890.json
-├── f9e8d7c6-b5a4-3210-fedc-ba0987654321.json
-└── ...
-```
-
-每个 JSON 文件包含一个完整的会话数据：
+记忆管理参数存储在 `~/.afs/config.json`（首次运行自动创建）：
 
 ```json
 {
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "title": "帮我看看当前目录有哪些文件",
-  "createdAt": "2026-04-06T15:00:00",
-  "updatedAt": "2026-04-06T15:05:30",
-  "messages": [
-    { "role": "system", "content": "你是一个能操作电脑的 AI 助手..." },
-    { "role": "user", "content": "帮我看看当前目录有哪些文件" },
-    { "role": "assistant", "content": null, "toolCalls": [...] },
-    { "role": "tool", "content": "file1.txt\nfile2.java\n...", "toolCallId": "call_xxx" },
-    { "role": "assistant", "content": "当前目录下有以下文件：..." }
-  ]
+  "memory": {
+    "maxContextTokens": 8000,
+    "compactionThreshold": 0.8,
+    "keepRecentRounds": 3
+  }
 }
 ```
 
-## 与 demo02 的差异
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `maxContextTokens` | 8000 | 上下文 token 上限（教学用途故意设小，生产中根据模型能力设置） |
+| `compactionThreshold` | 0.8 | 达到上限的 80% 时触发压缩，留 20% buffer |
+| `keepRecentRounds` | 3 | 压缩时保留最近 3 轮对话（1 轮 = user + assistant + 可能的 tool 消息） |
 
-| 特性 | demo02 | demo03 |
-|------|--------|--------|
-| 会话数量 | 单一会话 | 多会话管理 |
-| 数据持久化 | 无（内存中，关闭即丢失） | JSON 文件持久化 |
-| 会话切换 | 不支持 | 侧边栏点击切换 |
-| 历史恢复 | 不支持 | 启动时自动加载 |
-| GUI 布局 | 纯聊天窗口 | 左侧侧边栏 + 右侧聊天窗口 |
+## 消息气泡类型
+
+| 类型 | 颜色 | 说明 |
+|------|------|------|
+| USER | 蓝色（右对齐） | 用户消息 |
+| AGENT | 灰色（左对齐） | Agent 回复 |
+| TOOL_CALL | 橙色边框 | 工具调用 |
+| TOOL_RESULT | 绿色边框 | 工具结果 |
+| ERROR | 红色边框 | 错误信息 |
+| STATUS | 灰色居中 | 状态提示 |
+| **MEMORY** | **紫色边框（居中）** | **⭐ 记忆压缩通知（摘要 + token 对比）** |
