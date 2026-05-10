@@ -14,6 +14,10 @@ import com.github.agent.demo06.session.Session;
 import com.github.agent.demo06.session.SessionChangeListener;
 import com.github.agent.demo06.session.SessionManager;
 import com.github.agent.demo06.session.SessionStore;
+import com.github.agent.demo06.skill.LoadSkillTool;
+import com.github.agent.demo06.skill.SkillLoader;
+import com.github.agent.demo06.skill.SkillMeta;
+import com.github.agent.demo06.skill.SkillRegistry;
 import com.github.agent.demo06.tool.ToolRegistry;
 import com.github.agent.demo06.tool.impl.ExecTool;
 import org.slf4j.Logger;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Agent 服务层 —— 封装 Agent 的初始化、生命周期管理、会话管理和异步调用。
@@ -55,6 +60,12 @@ public class AgentService {
     /** 长期记忆管理器 —— 跨会话的知识持久化和检索 */
     private LongTermMemoryManager longTermMemoryManager;
 
+    /** Skill 注册表 —— 启动时扫描 ~/.afs/skills/ 填充；供 GUI 与 LoadSkillTool 查询 */
+    private SkillRegistry skillRegistry;
+
+    /** load_skill 工具引用 —— setCallback 时回填 callback */
+    private LoadSkillTool loadSkillTool;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "agent-worker");
         t.setDaemon(true);
@@ -81,13 +92,29 @@ public class AgentService {
         // 初始化 LLM 客户端
         LLMClient llmClient = new LLMClient(config.getApiKey(), config.getBaseUrl(), config.getModel());
 
-        // 注册工具
+        // ⭐ 初始化 Skills 子系统
+        SkillLoader skillLoader = new SkillLoader();
+        List<SkillMeta> skillMetas = skillLoader.loadAll();
+        this.skillRegistry = new SkillRegistry();
+        this.skillRegistry.register(skillMetas);
+        log.info("已发现 {} 个 skill: {}", skillMetas.size(),
+                skillMetas.stream().map(SkillMeta::getName).collect(Collectors.toList()));
+
+        // 注册工具（ExecTool + LoadSkillTool）
         ToolRegistry toolRegistry = new ToolRegistry();
         toolRegistry.register(new ExecTool());
+        this.loadSkillTool = new LoadSkillTool(this.skillRegistry);
+        toolRegistry.register(this.loadSkillTool);
         log.info("已注册工具: {}", toolRegistry.all().stream().map(t -> t.name()).toList());
 
+        // 拼接最终 system prompt（基础 prompt + Skills 菜单）
+        String skillMenu = this.skillRegistry.toPromptMenu();
+        String finalSystemPrompt = skillMenu.isEmpty()
+                ? AgentConfig.SYSTEM_PROMPT
+                : AgentConfig.SYSTEM_PROMPT + "\n\n" + skillMenu;
+
         // 创建 Agent
-        agentLoop = new AgentLoop(llmClient, toolRegistry, AgentConfig.SYSTEM_PROMPT, config.getMaxSteps());
+        agentLoop = new AgentLoop(llmClient, toolRegistry, finalSystemPrompt, config.getMaxSteps());
 
         // ⭐ 初始化记忆管理器
         AppConfigLoader appConfig = new AppConfigLoader().load();
@@ -130,6 +157,9 @@ public class AgentService {
     public void setCallback(AgentCallback callback) {
         if (agentLoop != null) {
             agentLoop.setCallback(callback);
+        }
+        if (loadSkillTool != null) {
+            loadSkillTool.setCallback(callback);
         }
     }
 
@@ -347,6 +377,15 @@ public class AgentService {
         } catch (Exception e) {
             log.error("同步消息到会话失败: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * 获取 Skill 注册表 —— 供右侧 SkillSidebar 遍历所有 skill 渲染列表。
+     *
+     * @return 注册表实例；若尚未初始化（不应发生）则返回 null
+     */
+    public SkillRegistry getSkillRegistry() {
+        return skillRegistry;
     }
 
     /**
