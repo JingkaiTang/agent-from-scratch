@@ -49,6 +49,9 @@ public class ChatWindow {
     /** 会话列表侧边栏 */
     private SessionSidebar sessionSidebar;
 
+    /** 右侧 Skills 面板 */
+    private SkillSidebar skillSidebar;
+
     /** 当前正在流式输出的消息气泡（SSE 流式响应时使用） */
     private MessageBubble streamingBubble;
 
@@ -203,6 +206,10 @@ public class ChatWindow {
         inputBar.setAlignment(Pos.CENTER);
         inputBar.setStyle("-fx-background-color: #FAFAFA; -fx-border-color: #E0E0E0; -fx-border-width: 1 0 0 0;");
         root.setBottom(inputBar);
+
+        // --- 右侧：Skills 面板 ---
+        skillSidebar = new SkillSidebar(agentService);
+        root.setRight(skillSidebar);
     }
 
     /**
@@ -370,6 +377,17 @@ public class ChatWindow {
                             "📝 长期记忆更新: 写入 " + entryCount + " 条新记忆");
                 });
             }
+
+            @Override
+            public void onSkillLoad(String skillName, String description) {
+                Platform.runLater(() -> {
+                    String info = "🧩 已加载技能：" + skillName + "\n" + description;
+                    addMessage(MessageBubble.Type.SKILL_LOAD, info);
+                    if (skillSidebar != null) {
+                        skillSidebar.onSkillLoadEvent(skillName);
+                    }
+                });
+            }
         });
     }
 
@@ -438,7 +456,17 @@ public class ChatWindow {
                         }
                     }
                 }
-                case "tool" -> addMessage(MessageBubble.Type.TOOL_RESULT, msg.getContent());
+                case "tool" -> {
+                    // 判断这条 tool 消息是否是 load_skill 的成功返回；若是则渲染为 SKILL_LOAD 气泡
+                    String loadedSkill = findLoadSkillCallName(session, msg.getToolCallId());
+                    boolean isSuccess = msg.getContent() != null && !msg.getContent().startsWith("错误：");
+                    if (loadedSkill != null && isSuccess) {
+                        addMessage(MessageBubble.Type.SKILL_LOAD,
+                                "🧩 已加载技能：" + loadedSkill);
+                    } else {
+                        addMessage(MessageBubble.Type.TOOL_RESULT, msg.getContent());
+                    }
+                }
                 // system 消息不在 UI 中展示
             }
         }
@@ -451,6 +479,34 @@ public class ChatWindow {
         Session current = agentService.getCurrentSession();
         String activeId = current != null ? current.getId() : "";
         sessionSidebar.refresh(agentService.getAllSessionsSorted(), activeId);
+    }
+
+    /**
+     * 根据 tool_call_id 从 session 历史中找出对应 load_skill 调用的 skill 名。
+     * 找不到则返回 null（意味着该 tool 消息不是 load_skill 的结果）。
+     */
+    private static String findLoadSkillCallName(Session session, String toolCallId) {
+        if (toolCallId == null) return null;
+        for (ChatMessage m : session.getMessages()) {
+            if (!"assistant".equals(m.getRole())) continue;
+            if (m.getToolCalls() == null) continue;
+            for (ChatMessage.ToolCall tc : m.getToolCalls()) {
+                if (!toolCallId.equals(tc.getId())) continue;
+                if (tc.getFunction() == null) return null;
+                if (!"load_skill".equals(tc.getFunction().getName())) return null;
+                String args = tc.getFunction().getArguments();
+                if (args == null) return null;
+                try {
+                    java.util.Map<String, Object> map = new com.fasterxml.jackson.databind.ObjectMapper()
+                            .readValue(args, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                    Object v = map.get("name");
+                    return (v instanceof String s && !s.isBlank()) ? s.trim() : null;
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     /**
