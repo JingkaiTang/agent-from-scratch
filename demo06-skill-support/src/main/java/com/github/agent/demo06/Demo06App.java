@@ -54,7 +54,7 @@ public class Demo06App extends Application {
         }
 
         // ========== 3. 配置窗口并显示 ==========
-        Scene scene = new Scene(chatWindow.getRoot(), 1060, 650);
+        Scene scene = new Scene(chatWindow.getRoot(), 1280, 650);
         scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
 
         primaryStage.setTitle("Agent From Scratch - Skills");
@@ -66,7 +66,7 @@ public class Demo06App extends Application {
                 new javafx.scene.image.Image(getClass().getResourceAsStream("/icon_32.png"))
         );
         primaryStage.setScene(scene);
-        primaryStage.setMinWidth(700);
+        primaryStage.setMinWidth(900);
         primaryStage.setMinHeight(400);
         primaryStage.show();
 
