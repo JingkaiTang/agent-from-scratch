@@ -1,5 +1,8 @@
 package com.github.agent.demo06.skill;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,14 +23,19 @@ import java.util.Map;
  */
 public class SkillRegistry {
 
+    private static final Logger log = LoggerFactory.getLogger(SkillRegistry.class);
+
     /** 按注册顺序保留（LinkedHashMap） */
     private final Map<String, SkillMeta> byName = new LinkedHashMap<>();
 
     /**
-     * 注册一批 skill。重名后注册者覆盖前者（由 SkillLoader 决定扫描顺序）。
+     * 注册一批 skill。重名时后注册者覆盖前者（由 SkillLoader 决定扫描顺序），同时 warn 提示。
      */
     public void register(List<SkillMeta> metas) {
         for (SkillMeta m : metas) {
+            if (byName.containsKey(m.getName())) {
+                log.warn("skill '{}' 重名，后注册者覆盖前者", m.getName());
+            }
             byName.put(m.getName(), m);
         }
     }

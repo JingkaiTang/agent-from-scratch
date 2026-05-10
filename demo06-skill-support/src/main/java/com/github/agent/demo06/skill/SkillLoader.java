@@ -10,7 +10,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -100,7 +99,8 @@ public class SkillLoader {
             }
             Path target = SKILLS_DIR.resolve(skillName).resolve("SKILL.md");
             Files.createDirectories(target.getParent());
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            // bootstrapDefaults 仅在 SKILLS_DIR 不存在时调用，所以 target 一定是新建——无需 REPLACE_EXISTING
+            Files.copy(in, target);
             log.info("已拷贝内置 skill: {} → {}", skillName, target);
         } catch (IOException e) {
             log.warn("拷贝内置 skill '{}' 失败：{}", skillName, e.getMessage());
@@ -121,7 +121,7 @@ public class SkillLoader {
      * </pre>
      * 仅识别 name 和 description 两个字段，其它忽略。缺失必填字段则返回 null 并 warn。
      */
-    SkillMeta parseFrontmatter(Path skillMd) throws IOException {
+    private SkillMeta parseFrontmatter(Path skillMd) throws IOException {
         String name = null;
         String description = null;
         try (BufferedReader reader = new BufferedReader(

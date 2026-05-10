@@ -31,8 +31,8 @@ public class LoadSkillTool implements Tool {
 
     private final SkillRegistry registry;
 
-    /** 由 AgentService.setCallback 时回填；可能为 null */
-    private AgentCallback callback;
+    /** 由 AgentService.setCallback 时回填；可能为 null。volatile 保证跨线程可见性 */
+    private volatile AgentCallback callback;
 
     public LoadSkillTool(SkillRegistry registry) {
         this.registry = registry;
