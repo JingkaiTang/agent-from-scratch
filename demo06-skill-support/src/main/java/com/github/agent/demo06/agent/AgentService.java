@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 /**
  * Agent 服务层 —— 封装 Agent 的初始化、生命周期管理、会话管理和异步调用。
  * <p>
- * 在 Demo04 基础上新增：
+ * 在 Demo05 基础上新增：
  * <ul>
  *   <li>创建 {@link LongTermMemoryManager} 并注入 AgentLoop，启用跨会话长期记忆</li>
  *   <li>每轮对话结束后异步触发记忆提取（Ingest），将知识写入 memories.md</li>

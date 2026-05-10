@@ -395,7 +395,8 @@ public class ChatWindow {
             @Override
             public void onSkillLoad(String skillName, String description) {
                 Platform.runLater(() -> {
-                    String info = "🧩 已加载技能：" + skillName + "\n" + description;
+                    // roleLabel 已经显示"🧩 已加载技能"，content 直接以 skill 名 + 描述展开即可
+                    String info = skillName + "\n" + description;
                     addMessage(MessageBubble.Type.SKILL_LOAD, info);
                     if (skillSidebar != null) {
                         skillSidebar.onSkillLoadEvent(skillName);
@@ -485,8 +486,13 @@ public class ChatWindow {
                     boolean isSuccess = msg.getContent() != null
                             && !msg.getContent().startsWith(LoadSkillTool.ERROR_PREFIX);
                     if (loadedSkill != null && isSuccess) {
-                        addMessage(MessageBubble.Type.SKILL_LOAD,
-                                "🧩 已加载技能：" + loadedSkill);
+                        // 与实时回调 onSkillLoad 的气泡内容保持一致：skillName + 描述（如能取到）
+                        com.github.agent.demo06.skill.SkillMeta meta =
+                                agentService.getSkillRegistry().get(loadedSkill);
+                        String info = (meta != null)
+                                ? loadedSkill + "\n" + meta.getDescription()
+                                : loadedSkill;
+                        addMessage(MessageBubble.Type.SKILL_LOAD, info);
                     } else {
                         addMessage(MessageBubble.Type.TOOL_RESULT, msg.getContent());
                     }
