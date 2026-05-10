@@ -26,9 +26,9 @@ import org.slf4j.LoggerFactory;
  * export OPENAI_BASE_URL=https://api.openai.com/v1   # 可选
  * export OPENAI_MODEL=gpt-4o                          # 可选
  *
- * cd demo05-long-term-memory
+ * cd demo06-skill-support
  * mvn compile exec:java
- * </pre>
+ *</pre>
  */
 public class Demo06App extends Application {
 
