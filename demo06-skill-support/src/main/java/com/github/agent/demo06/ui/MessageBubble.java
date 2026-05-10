@@ -40,7 +40,8 @@ public class MessageBubble extends HBox {
         TOOL_RESULT,    // 工具结果
         ERROR,          // 错误信息
         STATUS,         // 状态提示（如"思考中..."）
-        MEMORY          // ⭐ 记忆压缩（上下文压缩通知）
+        MEMORY,         // ⭐ 记忆压缩（上下文压缩通知）
+        SKILL_LOAD      // ⭐ demo06 新增：已加载 skill 气泡
     }
 
     /** 消息内容区域（用于流式更新） */
@@ -165,10 +166,25 @@ public class MessageBubble extends HBox {
                 roleLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #6B21A8;");
                 setAlignment(Pos.CENTER);
             }
+            case SKILL_LOAD -> {
+                bubble.setStyle("""
+                        -fx-background-color: #CFFAFE;
+                        -fx-background-radius: 12;
+                        -fx-border-color: #0891B2;
+                        -fx-border-radius: 12;
+                        -fx-border-width: 1;
+                        """);
+                bubble.setMaxWidth(600);
+                messageArea.setMaxWidth(570);
+                messageArea.getStyleClass().add("msg-skill-load");
+                messageArea.setStyle("-fx-font-size: 12px;");
+                roleLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #155E75;");
+                setAlignment(Pos.CENTER);
+            }
         }
 
         // 构建顶部栏：角色标签 + 弹性空间 + 复制按钮
-        if (type != Type.STATUS && type != Type.MEMORY) {
+        if (type != Type.STATUS && type != Type.MEMORY && type != Type.SKILL_LOAD) {
             copyButton = createCopyButton(content, type);
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -299,6 +315,7 @@ public class MessageBubble extends HBox {
             case TOOL_RESULT -> "📋 工具结果";
             case ERROR -> "❌ 错误";
             case MEMORY -> "🧠 记忆压缩";
+            case SKILL_LOAD -> "🧩 已加载技能";
             case STATUS -> "";
         };
     }
