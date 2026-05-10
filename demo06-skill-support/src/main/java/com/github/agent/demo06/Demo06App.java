@@ -11,10 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Demo05 入口 —— JavaFX Application 启动类。
+ * Demo06 入口 —— JavaFX Application 启动类。
  * <p>
- * 在 Demo04（短期记忆管理）基础上新增跨会话长期记忆功能：
- * 对话结束后自动提取关键信息写入 memories.md，新对话时自动检索相关知识注入上下文。
+ * 在 Demo05（长期记忆）基础上新增 Claude Code 风格的 Skills 机制：
+ * 元数据预加载 + LLM 自主按需加载 skill 完整指令。
  * <ul>
  *   <li>Agent 配置与服务 → {@link AgentConfig} + {@link AgentService}</li>
  *   <li>GUI 聊天窗口 → {@link ChatWindow}</li>
