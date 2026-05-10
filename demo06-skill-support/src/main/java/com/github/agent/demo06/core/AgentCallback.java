@@ -83,4 +83,17 @@ public interface AgentCallback {
      * @param entryCount 新写入的记忆条目数量
      */
     default void onLongTermMemoryIngest(int entryCount) {}
+
+    // ========== Skills 回调 ==========
+
+    /**
+     * 当 LLM 通过 load_skill 工具加载某个 skill 后触发。
+     * <p>
+     * 此回调用于 GUI 在对话流中插入"已加载技能"气泡、
+     * 以及刷新右侧 SkillSidebar 中对应 skill 的"已加载"徽章。
+     *
+     * @param skillName   被加载的 skill 名
+     * @param description skill 的简短描述（来自 frontmatter，便于气泡展示）
+     */
+    default void onSkillLoad(String skillName, String description) {}
 }
