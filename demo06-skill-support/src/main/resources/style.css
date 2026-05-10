@@ -97,6 +97,15 @@
     -fx-fill: #6B21A8;
 }
 
+/* ===== 已加载 skill —— 青色文字 ===== */
+.msg-skill-load {
+    -fx-text-fill: #155E75;
+    -fx-control-inner-background: #CFFAFE;
+}
+.msg-skill-load .text {
+    -fx-fill: #155E75;
+}
+
 /* ===== 其他组件字体 ===== */
 .button {
     -fx-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system;

@@ -1,9 +1,12 @@
 package com.github.agent.demo06.ui;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.agent.demo06.agent.AgentService;
 import com.github.agent.demo06.core.AgentCallback;
 import com.github.agent.demo06.model.ChatMessage;
 import com.github.agent.demo06.session.Session;
+import com.github.agent.demo06.skill.LoadSkillTool;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -18,25 +21,32 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * 聊天窗口 —— 纯 GUI 组件，负责界面布局和用户交互。
  * <p>
- * 在 Demo03 基础上新增记忆压缩气泡的展示：当 Agent 触发上下文压缩时，
- * 在对话流中插入紫色的记忆压缩信息气泡，展示摘要内容和 token 对比。
+ * 演进路径：会话管理（demo03）→ 记忆压缩气泡（demo04）→ 长期记忆气泡（demo05）→
+ * Skills 集成（demo06）：右侧挂载 {@link SkillSidebar} 面板，对话流中渲染 SKILL_LOAD 气泡。
  * <p>
  * 职责：
  * <ul>
- *   <li>构建聊天界面的所有 UI 组件（侧边栏、标题栏、消息区域、输入区域）</li>
+ *   <li>构建聊天界面的所有 UI 组件（侧边栏、标题栏、消息区域、输入区域、Skills 面板）</li>
  *   <li>处理用户输入事件（发送消息、快捷键）</li>
  *   <li>管理消息气泡的展示和状态切换（思考中/空闲）</li>
  *   <li>支持 SSE 流式响应的逐 token 实时展示</li>
- *   <li>集成 {@link SessionSidebar}，支持多会话的创建、切换和删除</li>
+ *   <li>集成 {@link SessionSidebar}（左）和 {@link SkillSidebar}（右）</li>
  *   <li>会话切换时重新渲染历史消息到聊天区域</li>
  * </ul>
  * <p>
  * 通过 {@link AgentService} 与 Agent 层和会话管理层通信，不直接依赖 AgentLoop、SessionManager 等底层组件。
  */
 public class ChatWindow {
+
+    /** Jackson ObjectMapper 是线程安全且重量级的，复用一个静态实例 */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // ---- UI 组件 ----
     private final BorderPane root;
@@ -291,6 +301,9 @@ public class ChatWindow {
         agentService.setCallback(new AgentCallback() {
             @Override
             public void onToolCall(String toolName, String argsJson) {
+                // load_skill 的工具调用与结果由 onSkillLoad 渲染为 SKILL_LOAD 气泡，
+                // 这里跳过，避免出现 "🔧 工具调用 + 📋 工具结果 + 🧩 已加载技能" 三气泡叠加
+                if (LoadSkillTool.TOOL_NAME.equals(toolName)) return;
                 Platform.runLater(() ->
                         addMessage(MessageBubble.Type.TOOL_CALL, toolName + "(" + argsJson + ")")
                 );
@@ -298,6 +311,7 @@ public class ChatWindow {
 
             @Override
             public void onToolResult(String toolName, String result) {
+                if (LoadSkillTool.TOOL_NAME.equals(toolName)) return;
                 Platform.runLater(() ->
                         addMessage(MessageBubble.Type.TOOL_RESULT, result)
                 );
@@ -432,14 +446,18 @@ public class ChatWindow {
      * 根据 {@link ChatMessage} 的 role 字段，将消息映射为对应类型的 {@link MessageBubble}：
      * <ul>
      *   <li>{@code user} → USER 气泡</li>
-     *   <li>{@code assistant} → AGENT 气泡（仅渲染有文本内容的消息，跳过纯 tool_calls 消息）</li>
-     *   <li>{@code tool} → TOOL_RESULT 气泡</li>
+     *   <li>{@code assistant} → AGENT 气泡（仅渲染有文本内容的消息，跳过纯 tool_calls 消息）；
+     *       toolCalls 渲染为 TOOL_CALL 气泡，但 load_skill 调用跳过（由对应的 tool 消息渲染为 SKILL_LOAD 气泡）</li>
+     *   <li>{@code tool} → 普通工具结果渲染为 TOOL_RESULT 气泡；load_skill 的成功返回渲染为 SKILL_LOAD 气泡</li>
      *   <li>{@code system} → 跳过（不在 UI 中展示）</li>
      * </ul>
      *
      * @param session 要渲染的会话
      */
     private void renderSessionMessages(Session session) {
+        // 一次性预建 toolCallId → skillName 映射，避免 case "tool" 里 O(N²) 全量重复扫描
+        Map<String, String> skillCallIdToName = buildSkillCallIdMap(session.getMessages());
+
         for (ChatMessage msg : session.getMessages()) {
             switch (msg.getRole()) {
                 case "user" -> addMessage(MessageBubble.Type.USER, msg.getContent());
@@ -448,9 +466,14 @@ public class ChatWindow {
                     if (msg.getContent() != null && !msg.getContent().isBlank()) {
                         addMessage(MessageBubble.Type.AGENT, msg.getContent());
                     }
-                    // 如果有 tool_calls，渲染工具调用信息
+                    // 如果有 tool_calls，渲染工具调用信息（load_skill 的工具调用跳过——
+                    // 与实时回调 onToolCall 的逻辑保持一致，避免叠加 TOOL_CALL + SKILL_LOAD 双气泡）
                     if (msg.getToolCalls() != null) {
                         for (ChatMessage.ToolCall toolCall : msg.getToolCalls()) {
+                            if (toolCall.getFunction() != null
+                                    && LoadSkillTool.TOOL_NAME.equals(toolCall.getFunction().getName())) {
+                                continue;
+                            }
                             String callInfo = toolCall.getFunction().getName() + "(" + toolCall.getFunction().getArguments() + ")";
                             addMessage(MessageBubble.Type.TOOL_CALL, callInfo);
                         }
@@ -458,8 +481,9 @@ public class ChatWindow {
                 }
                 case "tool" -> {
                     // 判断这条 tool 消息是否是 load_skill 的成功返回；若是则渲染为 SKILL_LOAD 气泡
-                    String loadedSkill = findLoadSkillCallName(session, msg.getToolCallId());
-                    boolean isSuccess = msg.getContent() != null && !msg.getContent().startsWith("错误：");
+                    String loadedSkill = skillCallIdToName.get(msg.getToolCallId());
+                    boolean isSuccess = msg.getContent() != null
+                            && !msg.getContent().startsWith(LoadSkillTool.ERROR_PREFIX);
                     if (loadedSkill != null && isSuccess) {
                         addMessage(MessageBubble.Type.SKILL_LOAD,
                                 "🧩 已加载技能：" + loadedSkill);
@@ -482,31 +506,33 @@ public class ChatWindow {
     }
 
     /**
-     * 根据 tool_call_id 从 session 历史中找出对应 load_skill 调用的 skill 名。
-     * 找不到则返回 null（意味着该 tool 消息不是 load_skill 的结果）。
+     * 一次性扫描 session 历史，预建 {@code toolCallId → skillName} 映射。
+     * <p>
+     * 让 {@link #renderSessionMessages} 在 case "tool" 分支按 toolCallId 直接 O(1) 查询，
+     * 避免对每条 tool 消息都全量遍历 history 导致 O(N²)。
      */
-    private static String findLoadSkillCallName(Session session, String toolCallId) {
-        if (toolCallId == null) return null;
-        for (ChatMessage m : session.getMessages()) {
+    private static Map<String, String> buildSkillCallIdMap(List<ChatMessage> history) {
+        Map<String, String> map = new HashMap<>();
+        for (ChatMessage m : history) {
             if (!"assistant".equals(m.getRole())) continue;
             if (m.getToolCalls() == null) continue;
             for (ChatMessage.ToolCall tc : m.getToolCalls()) {
-                if (!toolCallId.equals(tc.getId())) continue;
-                if (tc.getFunction() == null) return null;
-                if (!"load_skill".equals(tc.getFunction().getName())) return null;
+                if (tc.getFunction() == null) continue;
+                if (!LoadSkillTool.TOOL_NAME.equals(tc.getFunction().getName())) continue;
                 String args = tc.getFunction().getArguments();
-                if (args == null) return null;
+                if (args == null) continue;
                 try {
-                    java.util.Map<String, Object> map = new com.fasterxml.jackson.databind.ObjectMapper()
-                            .readValue(args, new com.fasterxml.jackson.core.type.TypeReference<>() {});
-                    Object v = map.get("name");
-                    return (v instanceof String s && !s.isBlank()) ? s.trim() : null;
-                } catch (Exception e) {
-                    return null;
+                    Map<String, Object> parsed = MAPPER.readValue(args, new TypeReference<>() {});
+                    Object v = parsed.get("name");
+                    if (v instanceof String s && !s.isBlank()) {
+                        map.put(tc.getId(), s.trim());
+                    }
+                } catch (Exception ignored) {
+                    // 解析失败则该 toolCall 不入 map，对应 tool 消息会按普通 TOOL_RESULT 渲染
                 }
             }
         }
-        return null;
+        return map;
     }
 
     /**

@@ -6,6 +6,7 @@ import com.github.agent.demo06.agent.AgentService;
 import com.github.agent.demo06.model.ChatMessage;
 import com.github.agent.demo06.session.Session;
 import com.github.agent.demo06.session.SessionChangeListener;
+import com.github.agent.demo06.skill.LoadSkillTool;
 import com.github.agent.demo06.skill.SkillMeta;
 import com.github.agent.demo06.skill.SkillRegistry;
 import javafx.application.Platform;
@@ -39,8 +40,8 @@ public class SkillSidebar extends VBox {
 
     private static final Logger log = LoggerFactory.getLogger(SkillSidebar.class);
 
-    /** 侧边栏固定宽度 */
-    private static final double SIDEBAR_WIDTH = 220;
+    /** 侧边栏固定宽度（package-private 让 SkillCell 复用计算 maxWidth） */
+    static final double SIDEBAR_WIDTH = 220;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -49,8 +50,8 @@ public class SkillSidebar extends VBox {
     /** 所有 skill cell 的索引（by skill name） */
     private final Map<String, SkillCell> cellByName = new HashMap<>();
 
-    /** 当前会话已加载的 skill 集合（刷新徽章用） */
-    private Set<String> loadedSkills = new HashSet<>();
+    /** 当前会话已加载的 skill 集合。final 引用，原地清空/填充以避免引用被 runLater 替换时的竞态 */
+    private final Set<String> loadedSkills = new HashSet<>();
 
     public SkillSidebar(AgentService agentService) {
         this.agentService = agentService;
@@ -139,10 +140,12 @@ public class SkillSidebar extends VBox {
      */
     private void refreshLoadedFromSession(Session session) {
         Set<String> loaded = session == null
-                ? new HashSet<>()
+                ? Set.of()
                 : computeLoadedSkills(session.getMessages());
         Platform.runLater(() -> {
-            this.loadedSkills = loaded;
+            // 原地更新 loadedSkills（保持 final 引用），避免与 onSkillLoadEvent 之间的引用替换竞态
+            loadedSkills.clear();
+            loadedSkills.addAll(loaded);
             cellByName.forEach((n, cell) -> cell.setLoaded(loaded.contains(n)));
         });
     }
@@ -169,7 +172,7 @@ public class SkillSidebar extends VBox {
             if (msg.getToolCalls() == null) continue;
             for (ChatMessage.ToolCall tc : msg.getToolCalls()) {
                 if (tc.getFunction() == null) continue;
-                if (!"load_skill".equals(tc.getFunction().getName())) continue;
+                if (!LoadSkillTool.TOOL_NAME.equals(tc.getFunction().getName())) continue;
                 String args = tc.getFunction().getArguments();
                 String skillName = extractSkillNameFromArgs(args);
                 if (skillName != null) {
@@ -184,7 +187,7 @@ public class SkillSidebar extends VBox {
             String callId = msg.getToolCallId();
             if (!pendingByCallId.containsKey(callId)) continue;
             String content = msg.getContent();
-            if (content != null && !content.startsWith("错误：")) {
+            if (content != null && !content.startsWith(LoadSkillTool.ERROR_PREFIX)) {
                 loaded.add(pendingByCallId.get(callId));
             }
         }

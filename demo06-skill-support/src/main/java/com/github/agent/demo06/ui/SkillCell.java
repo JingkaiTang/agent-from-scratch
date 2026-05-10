@@ -4,8 +4,6 @@ import com.github.agent.demo06.skill.SkillMeta;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -20,6 +18,9 @@ import javafx.scene.layout.VBox;
  * 不响应点击——Skills 机制强调"由 LLM 自主决定加载"，用户不能手动触发加载。
  */
 public class SkillCell extends VBox {
+
+    /** 描述文字最大宽度：侧边栏 220 - 左右 padding 各 12 = 196 */
+    private static final double DESC_MAX_WIDTH = SkillSidebar.SIDEBAR_WIDTH - 24;
 
     private final Label badgeLabel;
     private final String skillName;
@@ -42,16 +43,13 @@ public class SkillCell extends VBox {
         Label nameLabel = new Label(meta.getName());
         nameLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #1F2937;");
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox topRow = new HBox(6, badgeLabel, nameLabel, spacer);
+        HBox topRow = new HBox(6, badgeLabel, nameLabel);
 
         // 描述行
         Label descLabel = new Label(meta.getDescription());
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6B7280;");
-        descLabel.setMaxWidth(200);
+        descLabel.setMaxWidth(DESC_MAX_WIDTH);
 
         getChildren().addAll(topRow, descLabel);
     }

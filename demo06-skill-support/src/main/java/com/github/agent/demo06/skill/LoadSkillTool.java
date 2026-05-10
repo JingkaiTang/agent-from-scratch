@@ -29,6 +29,12 @@ public class LoadSkillTool implements Tool {
 
     private static final Logger log = LoggerFactory.getLogger(LoadSkillTool.class);
 
+    /** load_skill 工具名常量，供 GUI 层判断 toolName 时引用，避免硬编码 */
+    public static final String TOOL_NAME = "load_skill";
+
+    /** 工具失败返回字符串的统一前缀；GUI 层用它判断"加载是否成功" */
+    public static final String ERROR_PREFIX = "错误：";
+
     private final SkillRegistry registry;
 
     /** 由 AgentService.setCallback 时回填；可能为 null。volatile 保证跨线程可见性 */
@@ -44,7 +50,7 @@ public class LoadSkillTool implements Tool {
 
     @Override
     public String name() {
-        return "load_skill";
+        return TOOL_NAME;
     }
 
     @Override
@@ -73,7 +79,7 @@ public class LoadSkillTool implements Tool {
     public String execute(Map<String, Object> arguments) {
         Object rawName = arguments == null ? null : arguments.get("name");
         if (!(rawName instanceof String nameStr) || nameStr.isBlank()) {
-            return "错误：缺少必需参数 'name'。";
+            return ERROR_PREFIX + "缺少必需参数 'name'。";
         }
         String skillName = nameStr.trim();
 
@@ -83,7 +89,7 @@ public class LoadSkillTool implements Tool {
                     .map(SkillMeta::getName)
                     .collect(Collectors.joining(", "));
             String listSuffix = available.isEmpty() ? "（当前无可用 skill）" : available;
-            return "错误：未找到名为 '" + skillName + "' 的 skill。\n可用的 skill 有：" + listSuffix + "。";
+            return ERROR_PREFIX + "未找到名为 '" + skillName + "' 的 skill。\n可用的 skill 有：" + listSuffix + "。";
         }
 
         try {
@@ -98,7 +104,7 @@ public class LoadSkillTool implements Tool {
             }
             return body;
         } catch (IOException e) {
-            return "错误：读取 skill '" + skillName + "' 失败：" + e.getMessage();
+            return ERROR_PREFIX + "读取 skill '" + skillName + "' 失败：" + e.getMessage();
         }
     }
 }
